@@ -1,26 +1,28 @@
-use std::{collections::HashMap, env, fmt::Display, time::Duration};
+use std::{ collections::HashMap, env, fmt::Display, str::FromStr, time::Duration };
 
-use aws_config::{BehaviorVersion, Region};
-use aws_sdk_s3::{config::Credentials, presigning::PresigningConfig, Client};
+use aws_config::{ BehaviorVersion, Region };
+use aws_sdk_s3::{ config::Credentials, presigning::PresigningConfig, Client };
 use axum::{
-    extract::{Path, Query, State},
-    http::HeaderValue,
+    extract::{ Path, Query, State },
+    http::{ HeaderName, HeaderValue },
     response::IntoResponse,
     routing::get,
     Router,
 };
-use axum_extra::extract::{cookie::Cookie, CookieJar};
+use axum_extra::extract::{ cookie::Cookie, CookieJar };
 use axum_macros::debug_handler;
 use base64::prelude::*;
-use hmac::{Hmac, Mac};
+use hmac::{ Hmac, Mac };
 use reqwest::{
-    header::{CACHE_CONTROL, CONTENT_TYPE},
-    Client as ReqwestClient, Method, StatusCode,
+    header::{ CACHE_CONTROL, CONTENT_TYPE },
+    Client as ReqwestClient,
+    Method,
+    StatusCode,
 };
 use serde::Deserialize;
 use sha2::Sha512;
 use tokio::net::TcpListener;
-use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::cors::{ AllowOrigin, CorsLayer };
 use uuid::Uuid;
 const PRESIGN_DURATION: Duration = Duration::from_secs(300);
 type HmacSha512 = Hmac<Sha512>;
@@ -62,12 +64,9 @@ async fn get_thumbnail(
     State(state): State<AppState>,
     cookie_jar: CookieJar,
     query: Query<Dimensions>,
-    Path((project_id, image_type, image_id)): Path<(Uuid, ImageType, Uuid)>,
+    Path((project_id, image_type, image_id)): Path<(Uuid, ImageType, Uuid)>
 ) -> impl IntoResponse {
-    let access_token = cookie_jar
-        .get("access")
-        .unwrap_or(&Cookie::new("access", ""))
-        .to_string();
+    let access_token = cookie_jar.get("access").unwrap_or(&Cookie::new("access", "")).to_string();
     let refresh_token = cookie_jar
         .get("refresh")
         .unwrap_or(&Cookie::new("refresh", ""))
@@ -78,13 +77,11 @@ async fn get_thumbnail(
     map.insert("access", access_token);
     map.insert("refresh", refresh_token);
 
-    let res = state
-        .reqwest_client
+    let res = state.reqwest_client
         .post(format!("{}/verify", &state.auth_service_url))
         .header(CONTENT_TYPE, "application/json")
         .json(&map)
-        .send()
-        .await
+        .send().await
         .unwrap();
 
     if res.status() != StatusCode::OK {
@@ -112,39 +109,25 @@ async fn get_thumbnail(
 
         let res = hmac.finalize().into_bytes();
 
-        let base_64 = BASE64_STANDARD
-            .encode(res)
-            .replace('+', "-")
-            .replace('/', "_");
+        let base_64 = BASE64_STANDARD.encode(res).replace('+', "-").replace('/', "_");
 
-        let url = format!(
-            "{}/{}/{}",
-            &state.thumbnail_service_url, &base_64, &sized_url
-        );
+        let url = format!("{}/{}/{}", &state.thumbnail_service_url, &base_64, &sized_url);
 
         return (
             StatusCode::OK,
             [
                 (CONTENT_TYPE, HeaderValue::from_str("text/plain").unwrap()),
-                (
-                    CACHE_CONTROL,
-                    HeaderValue::from_str("max-age=3600").unwrap(),
-                ),
+                (CACHE_CONTROL, HeaderValue::from_str("max-age=3600").unwrap()),
             ],
             url.to_string(),
         );
     }
 
-    let command = state
-        .client
+    let command = state.client
         .get_object()
         .bucket(&state.bucket)
-        .key(format!(
-            "assets/{}/{}/{}.webp",
-            &project_id, &image_type, &image_id
-        ))
-        .presigned(PresigningConfig::expires_in(PRESIGN_DURATION).unwrap())
-        .await
+        .key(format!("assets/{}/{}/{}.webp", &project_id, &image_type, &image_id))
+        .presigned(PresigningConfig::expires_in(PRESIGN_DURATION).unwrap()).await
         .unwrap();
 
     let url = command.uri();
@@ -153,10 +136,7 @@ async fn get_thumbnail(
         StatusCode::OK,
         [
             (CONTENT_TYPE, HeaderValue::from_str("text/plain").unwrap()),
-            (
-                CACHE_CONTROL,
-                HeaderValue::from_str("max-age=3600").unwrap(),
-            ),
+            (CACHE_CONTROL, HeaderValue::from_str("max-age=3600").unwrap()),
         ],
         url.to_string(),
     );
@@ -179,7 +159,8 @@ async fn main() {
 
     let creds = Credentials::new(access_key_id, secret_access_key, None, None, "");
     let reqwest_client = reqwest::Client::new();
-    let config = aws_sdk_s3::config::Builder::new()
+    let config = aws_sdk_s3::config::Builder
+        ::new()
         .behavior_version(BehaviorVersion::latest())
         .force_path_style(false)
         .region(Region::new("us-east-1"))
@@ -195,6 +176,8 @@ async fn main() {
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET])
+        .allow_credentials(true)
+        .allow_headers([HeaderName::from_str("module").unwrap()])
         .allow_origin(origins);
 
     let app = Router::new()
