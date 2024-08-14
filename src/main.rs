@@ -172,7 +172,7 @@ async fn main() {
 
     let client = aws_sdk_s3::Client::from_conf(config);
 
-    let listener = TcpListener::bind("[::]:5184").await.unwrap();
+    let listener = TcpListener::bind(format!("[::]:{}", port)).await.unwrap();
 
     let origins = AllowOrigin::list([editor_client.parse().unwrap()]);
 
