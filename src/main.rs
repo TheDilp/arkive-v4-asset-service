@@ -157,6 +157,8 @@ async fn main() {
 
     let thumbnail_secret = env::var("THUMBNAIL_SECRET").unwrap();
 
+    let port = env::var("PORT").unwrap();
+
     let creds = Credentials::new(access_key_id, secret_access_key, None, None, "");
     let reqwest_client = reqwest::Client::new();
     let config = aws_sdk_s3::config::Builder
@@ -191,6 +193,8 @@ async fn main() {
             thumbnail_service_url,
         })
         .layer(cors);
+
+    println!("RUNNING ON PORT {} 🚀", port);
 
     axum::serve(listener, app).await.unwrap();
 }
