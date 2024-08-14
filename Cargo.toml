@@ -9,11 +9,13 @@ aws-sdk-s3 = "1.43.0"
 axum = { version = "0.7.5", features = ["query"] }
 axum-extra = { version = "0.9.3", features = ["cookie-private"] }
 axum-macros = "0.4.1"
+base64 = "0.22.1"
 dotenv = "0.15.0"
-image = "0.25.2"
+hmac = "0.12.1"
 reqwest = { version = "0.12.5", features = ["json"] }
 serde = { version = "1.0.207", features = ["derive"] }
 serde_json = "1.0.124"
+sha2 = "0.10.8"
 tokio = { version = "1.39.2", features = ["full"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
 uuid = { version = "1.10.0", features = ["v4", "serde"] }
