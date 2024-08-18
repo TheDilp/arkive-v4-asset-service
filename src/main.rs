@@ -151,8 +151,8 @@ async fn main() {
     let secret_access_key = env::var("DO_SPACES_SECRET").unwrap();
     let bucket = env::var("DO_SPACES_NAME").unwrap();
 
-    let editor_client = env::var("EDITOR_CLIENT").unwrap();
-    let auth_service_url = env::var("AUTH_SERVICE").unwrap();
+    let editor_client = env::var("EDITOR_CLIENT_URL").unwrap();
+    let auth_service_url = env::var("AUTH_SERVICE_URL").unwrap();
     let thumbnail_service_url = env::var("THUMBNAIL_SERVICE").unwrap();
 
     let thumbnail_secret = env::var("THUMBNAIL_SECRET").unwrap();
