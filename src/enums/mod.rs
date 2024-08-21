@@ -9,3 +9,14 @@ pub enum ImageType {
     #[postgres(name = "map_images")]
     MapImages,
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SupportedImageType {
+    Jpeg,
+    Jpg,
+    Png,
+    Webp,
+    Avif,
+    Gif,
+}
