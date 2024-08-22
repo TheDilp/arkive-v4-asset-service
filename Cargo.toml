@@ -9,6 +9,7 @@ aws-sdk-s3 = "1.43.0"
 axum = { version = "0.7.5", features = ["multipart", "query"] }
 axum-extra = { version = "0.9.3", features = ["cookie-private"] }
 axum-macros = "0.4.1"
+axum_typed_multipart = "0.12.1"
 base64 = "0.22.1"
 deadpool-postgres = { version = "0.14.0", features = ["serde"] }
 dotenv = "0.15.0"
