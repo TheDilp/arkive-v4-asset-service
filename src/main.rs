@@ -1,19 +1,17 @@
-use std::{ env, str::FromStr, time::Duration };
+use std::{env, str::FromStr, time::Duration};
 
-use aws_config::{ BehaviorVersion, Region };
+use aws_config::{BehaviorVersion, Region};
 use aws_sdk_s3::config::Credentials;
-use axum::{ http::HeaderName, Router };
-use deadpool_postgres::{ Config as DeadPoolConfig, ManagerConfig };
+use axum::{http::HeaderName, Router};
+use deadpool_postgres::{Config as DeadPoolConfig, ManagerConfig};
 use reqwest::Method;
 use routes::{
-    crud_routes::crud_routes,
-    thumbnail_routes::thumbnail_routes,
-    upload_routes::upload_routes,
+    crud_routes::crud_routes, thumbnail_routes::thumbnail_routes, upload_routes::upload_routes,
 };
 use state::models::AppState;
 use tokio::net::TcpListener;
 use tokio_postgres::NoTls;
-use tower_http::cors::{ AllowOrigin, CorsLayer };
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 mod enums;
 mod routes;
@@ -50,14 +48,15 @@ async fn main() {
     cfg.manager = Some(ManagerConfig {
         recycling_method: deadpool_postgres::RecyclingMethod::Fast,
     });
-    let pool = cfg.create_pool(Some(deadpool_postgres::Runtime::Tokio1), NoTls).unwrap();
+    let pool = cfg
+        .create_pool(Some(deadpool_postgres::Runtime::Tokio1), NoTls)
+        .unwrap();
 
     let port = env::var("PORT").unwrap();
 
     let creds = Credentials::new(access_key_id, secret_access_key, None, None, "");
     let reqwest_client = reqwest::Client::new();
-    let config = aws_sdk_s3::config::Builder
-        ::new()
+    let config = aws_sdk_s3::config::Builder::new()
         .behavior_version(BehaviorVersion::latest())
         .force_path_style(false)
         .region(Region::new("us-east-1"))
@@ -82,19 +81,21 @@ async fn main() {
         .allow_headers([HeaderName::from_str("module").unwrap()])
         .allow_origin(origins);
 
+    let state = AppState {
+        client,
+        bucket,
+        reqwest_client,
+        auth_service_url,
+        thumbnail_secret,
+        thumbnail_service_url,
+        pool,
+    };
+
     let app = Router::new()
-        .merge(crud_routes())
+        .merge(crud_routes(state.clone()))
         .merge(upload_routes())
         .merge(thumbnail_routes())
-        .with_state(AppState {
-            client,
-            bucket,
-            reqwest_client,
-            auth_service_url,
-            thumbnail_secret,
-            thumbnail_service_url,
-            pool,
-        })
+        .with_state(state)
         .layer(cors);
 
     println!("RUNNING ON PORT {} 🚀", port);
