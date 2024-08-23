@@ -4,6 +4,7 @@ use axum::{ response::{ IntoResponse, Response }, Json };
 use postgres_types::{ FromSql, ToSql };
 use reqwest::StatusCode;
 use serde::{ Deserialize, Serialize };
+use serde_json::Value;
 #[derive(Deserialize, Debug, ToSql, FromSql)]
 #[serde(rename_all = "snake_case")]
 #[postgres(name = "ImageType")]
@@ -38,6 +39,7 @@ pub enum SupportedImageType {
 #[derive(Debug)]
 pub enum SuccessActions {
     // Create,
+    Download,
     Update,
     Delete,
     Upload,
@@ -46,7 +48,7 @@ pub enum SuccessActions {
 impl Display for SuccessActions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let output = match self {
-            // &SuccessActions::Create => "created",
+            &SuccessActions::Download => "downloaded",
             &SuccessActions::Update => "updated",
             &SuccessActions::Delete => "deleted",
             &SuccessActions::Upload => "uploaded",
@@ -58,6 +60,7 @@ impl Display for SuccessActions {
 #[derive(Debug)]
 pub enum AppResponse {
     Success(String, SuccessActions),
+    SuccessData(String, SuccessActions, Value),
     Error(String),
     Auth,
     Unauthorized,
@@ -70,6 +73,8 @@ impl IntoResponse for AppResponse {
             ok: bool,
             message: String,
             role_access: bool,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            data: Option<Value>,
         }
 
         let (status, res) = match self {
@@ -77,6 +82,18 @@ impl IntoResponse for AppResponse {
                 (
                     StatusCode::OK,
                     Json(ResponsePayload {
+                        ok: true,
+                        message: format!("{} successfully {}.", entity, action),
+                        role_access: true,
+                        data: None,
+                    }),
+                )
+            }
+            AppResponse::SuccessData(entity, action, data) => {
+                (
+                    StatusCode::OK,
+                    Json(ResponsePayload {
+                        data: Some(data),
                         ok: true,
                         message: format!("{} successfully {}.", entity, action),
                         role_access: true,
@@ -91,6 +108,7 @@ impl IntoResponse for AppResponse {
                         ok: false,
                         message: "There was an error with your request.".to_owned(),
                         role_access: true,
+                        data: None,
                     }),
                 )
             }
@@ -101,6 +119,7 @@ impl IntoResponse for AppResponse {
                         ok: false,
                         message: "You do not have permission to perform this action.".to_owned(),
                         role_access: false,
+                        data: None,
                     }),
                 )
             }
@@ -111,6 +130,7 @@ impl IntoResponse for AppResponse {
                         ok: false,
                         message: "UNAUTHORIZED".to_owned(),
                         role_access: false,
+                        data: None,
                     }),
                 )
             }

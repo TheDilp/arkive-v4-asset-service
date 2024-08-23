@@ -4,7 +4,7 @@ use aws_config::{ BehaviorVersion, Region };
 use aws_sdk_s3::config::Credentials;
 use axum::{ extract::{ MatchedPath, Request }, http::HeaderName, Router };
 use deadpool_postgres::{ Config as DeadPoolConfig, ManagerConfig };
-use reqwest::Method;
+use reqwest::{ header::CONTENT_TYPE, Method };
 use routes::{
     crud_routes::crud_routes,
     thumbnail_routes::thumbnail_routes,
@@ -79,9 +79,9 @@ async fn main() {
     ]);
 
     let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST, Method::DELETE])
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
         .allow_credentials(true)
-        .allow_headers([HeaderName::from_str("module").unwrap()])
+        .allow_headers([HeaderName::from_str("module").unwrap(), CONTENT_TYPE])
         .allow_origin(origins);
 
     let state = AppState {
@@ -98,6 +98,7 @@ async fn main() {
         .merge(crud_routes(state.clone()))
         .merge(upload_routes())
         .merge(thumbnail_routes())
+        .layer(cors)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|req: &Request| {
@@ -113,8 +114,7 @@ async fn main() {
                 })
                 .on_failure(())
         )
-        .with_state(state)
-        .layer(cors);
+        .with_state(state);
 
     println!("RUNNING ON PORT {} 🚀", port);
 

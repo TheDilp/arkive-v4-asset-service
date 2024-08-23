@@ -8,11 +8,16 @@ use axum::{
     middleware::{ from_fn_with_state, Next },
     response::{ IntoResponse, Response },
     routing::{ delete, post },
+    Json,
     Router,
 };
 use axum_extra::extract::CookieJar;
 use axum_typed_multipart::{ FieldData, TryFromMultipart, TypedMultipart };
 use reqwest::{ header::CONTENT_TYPE, Method, StatusCode };
+use serde::Deserialize;
+use base64::prelude::*;
+
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
@@ -35,6 +40,15 @@ struct UpdatePayload {
     file: Option<FieldData<Bytes>>,
 }
 
+#[derive(Deserialize)]
+struct ImageDownload {
+    id: Uuid,
+}
+
+#[derive(Deserialize)]
+struct DownloadPayload {
+    data: Vec<ImageDownload>,
+}
 async fn update_asset(
     State(state): State<AppState>,
     ExtractPath(id): ExtractPath<Uuid>,
@@ -150,6 +164,44 @@ async fn delete_asset(
     return AppResponse::Success("Image".to_owned(), crate::enums::SuccessActions::Delete);
 }
 
+async fn download_assets(
+    State(state): State<AppState>,
+    ExtractPath((project_id, image_type)): ExtractPath<(Uuid, ImageType)>,
+    Json(payload): Json<DownloadPayload>
+) -> impl IntoResponse {
+    let mut data_strings: Vec<String> = Vec::new();
+    for image in payload.data {
+        let data = state.client
+            .get_object()
+            .bucket(&state.bucket)
+            .key(format!("assets/{}/{}/{}.webp", &project_id, &image_type, &image.id))
+            .send().await;
+
+        if data.is_err() {
+            tracing::error!("ERROR GETTING IMAGE DATA - {}", data.err().unwrap());
+            continue;
+        }
+
+        let data = data.unwrap().body.collect().await;
+
+        if data.is_err() {
+            tracing::error!("ERROR GETTING IMAGE DATA - {}", data.err().unwrap());
+            continue;
+        }
+
+        let data = data.unwrap().into_bytes();
+
+        let base_64 = BASE64_STANDARD.encode(data);
+
+        data_strings.push(base_64);
+    }
+    return AppResponse::SuccessData(
+        "Assets".to_owned(),
+        crate::enums::SuccessActions::Download,
+        json!(data_strings)
+    );
+}
+
 async fn permission_middleware(
     cookie_jar: CookieJar,
     State(state): State<AppState>,
@@ -168,6 +220,7 @@ async fn permission_middleware(
         u if u.contains("/update/") => "update",
         u if u.contains("/delete/") || request.method() == &Method::DELETE => "delete",
         u if u.contains("upload") => "upload",
+        u if u.contains("download") => "read",
         _ => "NONE",
     };
 
@@ -291,10 +344,14 @@ pub fn crud_routes(state: AppState) -> Router<AppState> {
     Router::new().nest(
         "/assets",
         Router::new()
-            // routes must end with :id for middleware use
-            .route("/update/:id", post(update_asset))
-            .route("/:project_id/:image_type/:id", delete(delete_asset))
-            .layer(from_fn_with_state(state, permission_middleware))
-            .layer(DefaultBodyLimit::max(MAX_FILE_SIZE))
+            .merge(
+                Router::new()
+                    // routes must end with :id for middleware use
+                    .route("/update/:id", post(update_asset))
+                    .route("/:project_id/:image_type/:id", delete(delete_asset))
+                    .layer(from_fn_with_state(state, permission_middleware))
+                    .layer(DefaultBodyLimit::max(MAX_FILE_SIZE))
+            )
+            .merge(Router::new().route("/download/:project_id/:image_type", post(download_assets)))
     )
 }
