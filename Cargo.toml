@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-aws-config = "1.5.5"
+aws-config = { version = "1.5.5", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.43.0"
 axum = { version = "0.7.5", features = ["multipart", "query"] }
 axum-extra = { version = "0.9.3", features = ["cookie-private"] }

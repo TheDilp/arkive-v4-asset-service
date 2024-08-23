@@ -79,7 +79,7 @@ async fn main() {
     ]);
 
     let cors = CorsLayer::new()
-        .allow_methods([Method::GET])
+        .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_credentials(true)
         .allow_headers([HeaderName::from_str("module").unwrap()])
         .allow_origin(origins);

@@ -37,7 +37,7 @@ pub enum SupportedImageType {
 
 #[derive(Debug)]
 pub enum SuccessActions {
-    Create,
+    // Create,
     Update,
     Delete,
     Upload,
@@ -46,7 +46,7 @@ pub enum SuccessActions {
 impl Display for SuccessActions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let output = match self {
-            &SuccessActions::Create => "created",
+            // &SuccessActions::Create => "created",
             &SuccessActions::Update => "updated",
             &SuccessActions::Delete => "deleted",
             &SuccessActions::Upload => "uploaded",

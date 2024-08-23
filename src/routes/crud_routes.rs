@@ -1,24 +1,29 @@
-use std::env;
+use std::{ env, str::FromStr };
 
 use aws_sdk_s3::primitives::ByteStream;
 use axum::{
     body::{ Body, Bytes },
-    extract::{ DefaultBodyLimit, Path, Request, State },
+    extract::{ DefaultBodyLimit, Request, State },
     http::{ HeaderMap, HeaderValue },
     middleware::{ from_fn_with_state, Next },
     response::{ IntoResponse, Response },
-    routing::post,
+    routing::{ delete, post },
     Router,
 };
 use axum_extra::extract::CookieJar;
 use axum_typed_multipart::{ FieldData, TryFromMultipart, TypedMultipart };
-use reqwest::{ header::CONTENT_TYPE, StatusCode };
+use reqwest::{ header::CONTENT_TYPE, Method, StatusCode };
 use uuid::Uuid;
 
 use crate::{
     enums::{ AppResponse, ImageType },
     state::models::{ AppState, PermissionCheckResponse },
-    utils::{ auth_utils::check_auth, db_utils::get_client, image_utils::encode_lossy_webp },
+    utils::{
+        auth_utils::check_auth,
+        db_utils::get_client,
+        extractors::ExtractPath,
+        image_utils::encode_lossy_webp,
+    },
     MAX_FILE_SIZE,
 };
 
@@ -32,7 +37,7 @@ struct UpdatePayload {
 
 async fn update_asset(
     State(state): State<AppState>,
-    Path(id): Path<Uuid>,
+    ExtractPath(id): ExtractPath<Uuid>,
     TypedMultipart(UpdatePayload { title, owner_id, file }): TypedMultipart<UpdatePayload>
 ) -> impl IntoResponse {
     let client = get_client(&state.pool).await;
@@ -115,17 +120,53 @@ async fn update_asset(
     return AppResponse::Success("Image".to_owned(), crate::enums::SuccessActions::Update);
 }
 
+async fn delete_asset(
+    State(state): State<AppState>,
+    ExtractPath((project_id, image_type, id)): ExtractPath<(Uuid, ImageType, Uuid)>
+) -> impl IntoResponse {
+    let client = get_client(&state.pool).await;
+
+    if client.is_err() {
+        return client.err().unwrap();
+    }
+    let client = client.unwrap();
+
+    let del_res = &state.client
+        .delete_object()
+        .bucket(&state.bucket)
+        .key(format!("assets/{}/{}/{}.webp", &project_id, &image_type, &id))
+        .send().await;
+
+    if del_res.is_err() {
+        tracing::error!("{}", del_res.as_ref().err().unwrap());
+    }
+
+    let res = client.query("DELETE FROM images WHERE id = $1;", &[&id]).await;
+
+    if res.is_err() {
+        return AppResponse::Error(res.err().unwrap().to_string());
+    }
+
+    return AppResponse::Success("Image".to_owned(), crate::enums::SuccessActions::Delete);
+}
+
 async fn permission_middleware(
     cookie_jar: CookieJar,
-    Path(id): Path<Uuid>,
     State(state): State<AppState>,
     request: Request,
     next: Next
 ) -> Response {
     let url = request.uri().to_string();
+    let id = Uuid::from_str(url.clone().split("/").last().unwrap());
+
+    if id.is_err() {
+        return AppResponse::Error(id.err().unwrap().to_string()).into_response();
+    }
+    let id = id.unwrap();
+
     let action = match url {
         u if u.contains("/update/") => "update",
-        u if u.contains("/delete/") => "delete",
+        u if u.contains("/delete/") || request.method() == &Method::DELETE => "delete",
         u if u.contains("upload") => "upload",
         _ => "NONE",
     };
@@ -242,6 +283,7 @@ async fn permission_middleware(
     if !has_permission {
         return AppResponse::Auth.into_response();
     }
+
     return next.run(request).await;
 }
 
@@ -249,7 +291,9 @@ pub fn crud_routes(state: AppState) -> Router<AppState> {
     Router::new().nest(
         "/assets",
         Router::new()
+            // routes must end with :id for middleware use
             .route("/update/:id", post(update_asset))
+            .route("/:project_id/:image_type/:id", delete(delete_asset))
             .layer(from_fn_with_state(state, permission_middleware))
             .layer(DefaultBodyLimit::max(MAX_FILE_SIZE))
     )

@@ -2,7 +2,7 @@ use std::env;
 
 use aws_sdk_s3::primitives::ByteStream;
 use axum::{
-    extract::{ DefaultBodyLimit, Multipart, Path, State },
+    extract::{ DefaultBodyLimit, Multipart, State },
     response::IntoResponse,
     routing::post,
     Router,
@@ -13,13 +13,18 @@ use uuid::Uuid;
 use crate::{
     enums::{ AppResponse, ImageType },
     state::models::AppState,
-    utils::{ auth_utils::check_auth, db_utils::get_client, image_utils::encode_lossy_webp },
+    utils::{
+        auth_utils::check_auth,
+        db_utils::get_client,
+        extractors::ExtractPath,
+        image_utils::encode_lossy_webp,
+    },
     MAX_FILE_SIZE,
 };
 async fn upload_image(
     cookie_jar: CookieJar,
     State(state): State<AppState>,
-    Path((project_id, image_type)): Path<(Uuid, ImageType)>,
+    ExtractPath((project_id, image_type)): ExtractPath<(Uuid, ImageType)>,
     mut multipart: Multipart
 ) -> impl IntoResponse {
     let claims = check_auth(cookie_jar, &state.reqwest_client, state.auth_service_url).await;
@@ -233,7 +238,7 @@ async fn upload_user_avatar(
 
 async fn upload_gateway_entity(
     State(state): State<AppState>,
-    Path((project_id, entity_id)): Path<(Uuid, Uuid)>,
+    ExtractPath((project_id, entity_id)): ExtractPath<(Uuid, Uuid)>,
     mut multipart: Multipart
 ) -> impl IntoResponse {
     let client = get_client(&state.pool).await;
