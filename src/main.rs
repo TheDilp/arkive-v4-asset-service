@@ -1,17 +1,19 @@
-use std::{env, str::FromStr, time::Duration};
+use std::{ env, str::FromStr, time::Duration };
 
-use aws_config::{BehaviorVersion, Region};
+use aws_config::{ BehaviorVersion, Region };
 use aws_sdk_s3::config::Credentials;
-use axum::{http::HeaderName, Router};
-use deadpool_postgres::{Config as DeadPoolConfig, ManagerConfig};
+use axum::{ extract::{ MatchedPath, Request }, http::HeaderName, Router };
+use deadpool_postgres::{ Config as DeadPoolConfig, ManagerConfig };
 use reqwest::Method;
 use routes::{
-    crud_routes::crud_routes, thumbnail_routes::thumbnail_routes, upload_routes::upload_routes,
+    crud_routes::crud_routes,
+    thumbnail_routes::thumbnail_routes,
+    upload_routes::upload_routes,
 };
 use state::models::AppState;
 use tokio::net::TcpListener;
 use tokio_postgres::NoTls;
-use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::{ cors::{ AllowOrigin, CorsLayer }, trace::TraceLayer };
 
 mod enums;
 mod routes;
@@ -23,6 +25,8 @@ const MAX_FILE_SIZE: usize = 20_000_000;
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
+
     dotenv::dotenv().ok();
 
     let endpoint_url = env::var("DO_SPACES_ENDPOINT").unwrap();
@@ -48,15 +52,14 @@ async fn main() {
     cfg.manager = Some(ManagerConfig {
         recycling_method: deadpool_postgres::RecyclingMethod::Fast,
     });
-    let pool = cfg
-        .create_pool(Some(deadpool_postgres::Runtime::Tokio1), NoTls)
-        .unwrap();
+    let pool = cfg.create_pool(Some(deadpool_postgres::Runtime::Tokio1), NoTls).unwrap();
 
     let port = env::var("PORT").unwrap();
 
     let creds = Credentials::new(access_key_id, secret_access_key, None, None, "");
     let reqwest_client = reqwest::Client::new();
-    let config = aws_sdk_s3::config::Builder::new()
+    let config = aws_sdk_s3::config::Builder
+        ::new()
         .behavior_version(BehaviorVersion::latest())
         .force_path_style(false)
         .region(Region::new("us-east-1"))
@@ -95,6 +98,21 @@ async fn main() {
         .merge(crud_routes(state.clone()))
         .merge(upload_routes())
         .merge(thumbnail_routes())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|req: &Request| {
+                    let method = req.method();
+                    let uri = req.uri();
+
+                    let matched_path = req
+                        .extensions()
+                        .get::<MatchedPath>()
+                        .map(|matched_path| matched_path.as_str());
+
+                    tracing::error_span!("Request error at", %method, %uri, matched_path)
+                })
+                .on_failure(())
+        )
         .with_state(state)
         .layer(cors);
 

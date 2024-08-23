@@ -83,7 +83,6 @@ impl IntoResponse for AppResponse {
                     }),
                 )
             }
-
             AppResponse::Error(err) => {
                 tracing::error!("ERROR - {}", err);
                 (
@@ -95,7 +94,6 @@ impl IntoResponse for AppResponse {
                     }),
                 )
             }
-
             AppResponse::Auth => {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,

@@ -1,13 +1,11 @@
-use axum::http::StatusCode;
-use deadpool_postgres::{Object, Pool};
-pub async fn get_client(pool: &Pool) -> Result<Object, (StatusCode, String)> {
+use deadpool_postgres::{ Object, Pool };
+
+use crate::enums::AppResponse;
+pub async fn get_client(pool: &Pool) -> Result<Object, AppResponse> {
     let client = pool.get().await;
 
     if client.is_err() {
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "UNAUTHORIZED".to_string(),
-        ));
+        return Err(AppResponse::Error(client.err().unwrap().to_string()));
     }
 
     Ok(client.unwrap())

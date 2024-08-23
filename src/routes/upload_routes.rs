@@ -8,11 +8,10 @@ use axum::{
     Router,
 };
 use axum_extra::extract::CookieJar;
-use reqwest::StatusCode;
 use uuid::Uuid;
 
 use crate::{
-    enums::ImageType,
+    enums::{ AppResponse, ImageType },
     state::models::AppState,
     utils::{ auth_utils::check_auth, db_utils::get_client, image_utils::encode_lossy_webp },
     MAX_FILE_SIZE,
@@ -26,13 +25,13 @@ async fn upload_image(
     let claims = check_auth(cookie_jar, &state.reqwest_client, state.auth_service_url).await;
 
     if claims.is_err() {
-        return claims.err().unwrap();
+        return AppResponse::Unauthorized;
     }
 
     let claims = claims.unwrap().claims;
 
     if claims.is_none() {
-        return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED".to_string());
+        return AppResponse::Unauthorized;
     }
 
     let claims = claims.unwrap();
@@ -56,7 +55,7 @@ async fn upload_image(
 
         if data.is_err() {
             errors.push(name);
-            println!("ERROR GETTING FILE DATA - {}", data.err().unwrap());
+            tracing::error!("ERROR GETTING FILE DATA - {}", data.err().unwrap());
             continue;
         }
 
@@ -66,7 +65,7 @@ async fn upload_image(
         let img_data = image::load_from_memory(&data);
 
         if img_data.is_err() {
-            println!("{}", img_data.err().unwrap());
+            tracing::error!("{}", img_data.err().unwrap());
             continue;
         }
 
@@ -89,7 +88,7 @@ async fn upload_image(
             ).await;
 
             if res.is_err() {
-                println!("{}", res.err().unwrap());
+                tracing::error!("{}", res.err().unwrap());
 
                 let del_res = &state.client
                     .delete_object()
@@ -98,20 +97,19 @@ async fn upload_image(
                     .send().await;
 
                 if del_res.is_err() {
-                    println!("{}", del_res.as_ref().err().unwrap());
-                    todo!("USE TRACING");
+                    tracing::error!("{}", del_res.as_ref().err().unwrap());
                 }
                 errors.push(name);
                 continue;
             }
         } else {
-            println!("{}", upload.err().unwrap());
+            tracing::error!("{}", upload.err().unwrap());
             errors.push(name);
             continue;
         }
     }
-    println!("{:?}", errors);
-    return (StatusCode::OK, "Stagod".to_string());
+    tracing::error!("{:?}", errors);
+    return AppResponse::Success("Image".to_owned(), crate::enums::SuccessActions::Upload);
 }
 
 async fn upload_user_avatar(
@@ -123,13 +121,13 @@ async fn upload_user_avatar(
     let claims = check_auth(cookie_jar, &state.reqwest_client, state.auth_service_url).await;
 
     if claims.is_err() {
-        return claims.err().unwrap();
+        return AppResponse::Unauthorized;
     }
 
     let claims = claims.unwrap().claims;
 
     if claims.is_none() {
-        return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED".to_string());
+        return AppResponse::Unauthorized;
     }
 
     let claims = claims.unwrap();
@@ -147,7 +145,7 @@ async fn upload_user_avatar(
     ).await;
 
     if user.is_err() {
-        return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED".to_string());
+        return AppResponse::Unauthorized;
     }
     let user = user.unwrap();
     let user_id: Uuid = user.get("id");
@@ -170,7 +168,7 @@ async fn upload_user_avatar(
         }
 
         if data.is_err() {
-            println!("ERROR GETTING FILE DATA - {}", data.err().unwrap());
+            tracing::error!("ERROR GETTING FILE DATA - {}", data.err().unwrap());
             continue;
         }
 
@@ -180,7 +178,7 @@ async fn upload_user_avatar(
         let img_data = image::load_from_memory(&data);
 
         if img_data.is_err() {
-            println!("{}", img_data.err().unwrap());
+            tracing::error!("{}", img_data.err().unwrap());
             continue;
         }
 
@@ -211,7 +209,7 @@ async fn upload_user_avatar(
             ).await;
 
             if res.is_err() {
-                println!("{}", res.err().unwrap());
+                tracing::error!("{}", res.err().unwrap());
 
                 let del_res = &state.client
                     .delete_object()
@@ -220,18 +218,17 @@ async fn upload_user_avatar(
                     .send().await;
 
                 if del_res.is_err() {
-                    println!("{}", del_res.as_ref().err().unwrap());
-                    todo!("USE TRACING");
+                    tracing::error!("{}", del_res.as_ref().err().unwrap());
                 }
 
                 continue;
             }
         } else {
-            println!("{}", upload.err().unwrap());
+            tracing::error!("{}", upload.err().unwrap());
             continue;
         }
     }
-    return (StatusCode::OK, "Stagod".to_string());
+    return AppResponse::Success("Avatar".to_owned(), crate::enums::SuccessActions::Upload);
 }
 
 async fn upload_gateway_entity(
@@ -255,7 +252,7 @@ async fn upload_gateway_entity(
         }
 
         if data.is_err() {
-            println!("ERROR GETTING FILE DATA - {}", data.err().unwrap());
+            tracing::error!("ERROR GETTING FILE DATA - {}", data.err().unwrap());
             continue;
         }
 
@@ -265,7 +262,7 @@ async fn upload_gateway_entity(
         let img_data = image::load_from_memory(&data);
 
         if img_data.is_err() {
-            println!("{}", img_data.err().unwrap());
+            tracing::error!("{}", img_data.err().unwrap());
             continue;
         }
 
@@ -307,7 +304,7 @@ async fn upload_gateway_entity(
             ).await;
 
             if res.is_err() {
-                println!("{}", res.err().unwrap());
+                tracing::error!("{}", res.err().unwrap());
 
                 let del_res = &state.client
                     .delete_object()
@@ -316,18 +313,17 @@ async fn upload_gateway_entity(
                     .send().await;
 
                 if del_res.is_err() {
-                    println!("{}", del_res.as_ref().err().unwrap());
-                    todo!("USE TRACING");
+                    tracing::error!("{}", del_res.as_ref().err().unwrap());
                 }
                 continue;
             }
         } else {
-            println!("{}", upload.err().unwrap());
+            tracing::error!("{}", upload.err().unwrap());
             continue;
         }
     }
 
-    return (StatusCode::OK, "Stagod".to_string());
+    return AppResponse::Success("images".to_owned(), crate::enums::SuccessActions::Upload);
 }
 
 pub fn upload_routes() -> Router<AppState> {

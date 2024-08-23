@@ -16,7 +16,7 @@ use reqwest::{ header::CONTENT_TYPE, StatusCode };
 use uuid::Uuid;
 
 use crate::{
-    enums::ImageType,
+    enums::{ AppResponse, ImageType },
     state::models::{ AppState, PermissionCheckResponse },
     utils::{ auth_utils::check_auth, db_utils::get_client, image_utils::encode_lossy_webp },
     MAX_FILE_SIZE,
@@ -49,10 +49,7 @@ async fn update_asset(
             ).await;
 
             if res.is_err() {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "There was an error with your request".to_string(),
-                );
+                return AppResponse::Error(res.err().unwrap().to_string());
             }
         } else if title.is_some() && owner_id.is_none() {
             let res = client.query(
@@ -61,10 +58,7 @@ async fn update_asset(
             ).await;
 
             if res.is_err() {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "There was an error with your request".to_string(),
-                );
+                return AppResponse::Error(res.err().unwrap().to_string());
             }
         } else if title.is_none() && owner_id.is_some() {
             let res = client.query(
@@ -73,10 +67,7 @@ async fn update_asset(
             ).await;
 
             if res.is_err() {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "There was an error with your request".to_string(),
-                );
+                return AppResponse::Error(res.err().unwrap().to_string());
             }
         }
     }
@@ -88,10 +79,7 @@ async fn update_asset(
         ).await;
 
         if current_image.is_err() {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "There was an error with your request".to_string(),
-            );
+            return AppResponse::Error(current_image.err().unwrap().to_string());
         }
 
         let current_image = current_image.unwrap();
@@ -104,11 +92,7 @@ async fn update_asset(
         let img_data = image::load_from_memory(&file.contents);
 
         if img_data.is_err() {
-            println!("{}", img_data.err().unwrap());
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "There was an error with your request".to_string(),
-            );
+            return AppResponse::Error(img_data.err().unwrap().to_string());
         }
 
         let lossy = encode_lossy_webp(img_data.unwrap());
@@ -124,14 +108,11 @@ async fn update_asset(
             .send().await;
 
         if upload.is_err() {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "There was an error with your request".to_string(),
-            );
+            return AppResponse::Error(upload.err().unwrap().to_string());
         }
     }
 
-    return (StatusCode::OK, "Stagod".to_string());
+    return AppResponse::Success("Image".to_owned(), crate::enums::SuccessActions::Update);
 }
 
 async fn permission_middleware(
@@ -259,12 +240,7 @@ async fn permission_middleware(
     };
 
     if !has_permission {
-        let res = Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::from("There was an error with your request."))
-            .unwrap();
-
-        return res;
+        return AppResponse::Auth.into_response();
     }
     return next.run(request).await;
 }
