@@ -1,6 +1,6 @@
 use std::{ env, str::FromStr };
 
-use aws_sdk_s3::primitives::ByteStream;
+use aws_sdk_s3::{ primitives::ByteStream, types::ObjectIdentifier };
 use axum::{
     body::{ Body, Bytes },
     extract::{ DefaultBodyLimit, Request, State },
@@ -49,6 +49,18 @@ struct ImageDownload {
 struct DownloadPayload {
     data: Vec<ImageDownload>,
 }
+
+#[derive(Deserialize)]
+struct ImageDelete {
+    ids: Vec<Uuid>,
+    project_id: Uuid,
+}
+
+#[derive(Deserialize)]
+struct BulkDeletePayload {
+    data: ImageDelete,
+}
+
 async fn update_asset(
     State(state): State<AppState>,
     ExtractPath(id): ExtractPath<Uuid>,
@@ -162,6 +174,69 @@ async fn delete_asset(
     }
 
     return AppResponse::Success("Image".to_owned(), crate::enums::SuccessActions::Delete);
+}
+
+async fn bulk_delete_assets(
+    State(state): State<AppState>,
+    ExtractPath(image_type): ExtractPath<ImageType>,
+    Json(payload): Json<BulkDeletePayload>
+) -> impl IntoResponse {
+    let client = get_client(&state.pool).await;
+
+    if client.is_err() {
+        return client.err().unwrap();
+    }
+    let client = client.unwrap();
+
+    let res = client.query(
+        "DELETE FROM images WHERE id = ANY($1) RETURNING id;",
+        &[&payload.data.ids]
+    ).await;
+
+    if res.is_err() {
+        return AppResponse::Error(res.err().unwrap().to_string());
+    }
+
+    let deleted_ids: Vec<Uuid> = res
+        .unwrap()
+        .iter()
+        .map(|row| row.get("id"))
+        .collect();
+
+    let mut delete_objects: Vec<ObjectIdentifier> = vec![];
+    for id in deleted_ids {
+        let obj_id = ObjectIdentifier::builder()
+            .set_key(
+                Some(format!("assets/{}/{}/{}.webp", &payload.data.project_id, &image_type, &id))
+            )
+            .build();
+
+        if obj_id.is_err() {
+            continue;
+        }
+
+        let obj_id = obj_id.unwrap();
+
+        delete_objects.push(obj_id);
+    }
+
+    let delete_cmd = aws_sdk_s3::types::Delete::builder().set_objects(Some(delete_objects)).build();
+
+    if delete_cmd.is_err() {
+        return AppResponse::Error(delete_cmd.err().unwrap().to_string());
+    }
+    let delete_cmd = delete_cmd.unwrap();
+    let delete_res = &state.client
+        .delete_objects()
+        .bucket(&state.bucket)
+        .delete(delete_cmd)
+        .send().await;
+
+    if delete_res.is_err() {
+        AppResponse::Error(delete_res.as_ref().err().unwrap().to_string());
+    }
+
+    return AppResponse::Success("Images".to_owned(), crate::enums::SuccessActions::Delete);
 }
 
 async fn download_assets(
@@ -352,6 +427,13 @@ pub fn crud_routes(state: AppState) -> Router<AppState> {
                     .layer(from_fn_with_state(state, permission_middleware))
                     .layer(DefaultBodyLimit::max(MAX_FILE_SIZE))
             )
-            .merge(Router::new().route("/download/:project_id/:image_type", post(download_assets)))
+            .merge(
+                Router::new()
+                    .route("/download/:project_id/:image_type", post(download_assets))
+                    // Need the "delete" despite the method because other entities
+                    // can be arkived. This is to keep a consistent URL with other
+                    // entities on the UI side.
+                    .route("/bulk/delete/:image_type", delete(bulk_delete_assets))
+            )
     )
 }
