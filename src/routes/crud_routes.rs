@@ -28,6 +28,7 @@ use crate::{
         db_utils::get_client,
         extractors::ExtractPath,
         image_utils::encode_lossy_webp,
+        s3_utils::recursive_delete,
     },
     MAX_FILE_SIZE,
 };
@@ -415,6 +416,37 @@ async fn permission_middleware(
     return next.run(request).await;
 }
 
+async fn delete_folder(
+    State(state): State<AppState>,
+    ExtractPath(project_id): ExtractPath<Uuid>
+) -> impl IntoResponse {
+    let location = format!("assets/{}", project_id);
+
+    let res = recursive_delete(&state.client, &state.bucket, &location).await;
+
+    if res.is_err() {
+        return res.err().unwrap();
+    }
+
+    let client = get_client(&state.pool).await;
+
+    if client.is_err() {
+        return client.err().unwrap();
+    }
+    let client = client.unwrap();
+
+    let img_delete_res = client.query(
+        "DELETE FROM images WHERE project_id = $1;",
+        &[&project_id]
+    ).await;
+
+    if img_delete_res.is_err() {
+        return AppResponse::Error(img_delete_res.err().unwrap().to_string());
+    }
+
+    AppResponse::Success("Images".to_owned(), crate::enums::SuccessActions::Delete)
+}
+
 pub fn crud_routes(state: AppState) -> Router<AppState> {
     Router::new().nest(
         "/assets",
@@ -429,6 +461,7 @@ pub fn crud_routes(state: AppState) -> Router<AppState> {
             )
             .merge(
                 Router::new()
+                    .route("/folder/:project_id", delete(delete_folder))
                     .route("/download/:project_id/:image_type", post(download_assets))
                     // Need the "delete" despite the method because other entities
                     // can be arkived. This is to keep a consistent URL with other
