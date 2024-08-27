@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use aws_sdk_s3::presigning::PresigningConfig;
 use axum::{
-    extract::{ Query, State },
+    extract::{ Query, Request, State },
     http::HeaderValue,
     response::IntoResponse,
     routing::get,
@@ -15,6 +15,7 @@ use hmac::{ Hmac, Mac };
 use reqwest::{ header::{ CACHE_CONTROL, CONTENT_TYPE }, StatusCode };
 use serde::Deserialize;
 use sha2::Sha512;
+use url::Url;
 use uuid::Uuid;
 
 use crate::{
@@ -37,35 +38,63 @@ async fn get_thumbnail(
     State(state): State<AppState>,
     cookie_jar: CookieJar,
     query: Query<ThumbnailDimensions>,
-    ExtractPath((project_id, image_type, image_id)): ExtractPath<(Uuid, ImageType, Uuid)>
+    ExtractPath((project_id, image_type, image_id)): ExtractPath<(Uuid, ImageType, Uuid)>,
+    request: Request
 ) -> impl IntoResponse {
-    let access_token = cookie_jar.get("access").unwrap_or(&Cookie::new("access", "")).to_string();
-    let refresh_token = cookie_jar
-        .get("refresh")
-        .unwrap_or(&Cookie::new("refresh", ""))
-        .to_string();
+    let headers = request.headers();
 
-    let mut map = HashMap::new();
+    let url = Url::parse(&state.discord_service_url).unwrap();
+    let domain = url.domain();
+    let discord_service_domain = url.domain().unwrap();
+    if let Some(domain_string) = domain {
+        if domain_string.to_string() != discord_service_domain {
+            let access_token = cookie_jar
+                .get("access")
+                .unwrap_or(&Cookie::new("access", ""))
+                .to_string();
+            let refresh_token = cookie_jar
+                .get("refresh")
+                .unwrap_or(&Cookie::new("refresh", ""))
+                .to_string();
 
-    map.insert("access", access_token);
-    map.insert("refresh", refresh_token);
+            let mut map = HashMap::new();
 
-    let res = state.reqwest_client
-        .post(format!("{}/verify", &state.auth_service_url))
-        .header(CONTENT_TYPE, "application/json")
-        .json(&map)
-        .send().await
-        .unwrap();
+            map.insert("access", access_token);
+            map.insert("refresh", refresh_token);
 
-    if res.status() != StatusCode::OK {
-        return (
-            StatusCode::UNAUTHORIZED,
-            [
-                (CONTENT_TYPE, HeaderValue::from_str("image/webp").unwrap()),
-                (CACHE_CONTROL, HeaderValue::from_str("max-age=0").unwrap()),
-            ],
-            "".to_string(),
-        );
+            let res = state.reqwest_client
+                .post(format!("{}/verify", &state.auth_service_url))
+                .header(CONTENT_TYPE, "application/json")
+                .json(&map)
+                .send().await
+                .unwrap();
+
+            if res.status() != StatusCode::OK {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    [
+                        (CONTENT_TYPE, HeaderValue::from_str("image/webp").unwrap()),
+                        (CACHE_CONTROL, HeaderValue::from_str("max-age=0").unwrap()),
+                    ],
+                    "".to_string(),
+                );
+            }
+        } else {
+            let api_key_header = headers.get("X-API-KEY");
+
+            if let Some(api_key) = api_key_header {
+                if api_key.to_str().unwrap().to_owned() != state.discord_service_api_key {
+                    return (
+                        StatusCode::UNAUTHORIZED,
+                        [
+                            (CONTENT_TYPE, HeaderValue::from_str("image/webp").unwrap()),
+                            (CACHE_CONTROL, HeaderValue::from_str("max-age=0").unwrap()),
+                        ],
+                        "".to_string(),
+                    );
+                }
+            }
+        }
     }
 
     if query.width.is_some() && query.height.is_some() {

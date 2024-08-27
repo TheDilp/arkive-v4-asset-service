@@ -14,6 +14,8 @@ pub struct AppState {
     pub auth_service_url: String,
     pub thumbnail_secret: String,
     pub thumbnail_service_url: String,
+    pub discord_service_url: String,
+    pub discord_service_api_key: String,
     pub pool: Pool,
 }
 

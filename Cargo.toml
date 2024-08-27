@@ -26,5 +26,9 @@ tokio-postgres = { version = "0.7.11", features = ["with-uuid-1", "with-serde_js
 tower-http = { version = "0.5.2", features = ["cors", "trace"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["serde", "serde_json", "json", "tracing", "chrono"] }
+url = "2.5.2"
 uuid = { version = "1.10.0", features = ["v4", "serde"] }
 webp = "0.3.0"
+
+[profile.dev]
+opt-level = 1

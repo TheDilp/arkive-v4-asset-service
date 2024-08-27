@@ -41,8 +41,10 @@ async fn main() {
 
     let auth_service_url = env::var("AUTH_SERVICE_URL").unwrap();
     let thumbnail_service_url = env::var("THUMBNAIL_SERVICE").unwrap();
+    let discord_service_url = env::var("DISCORD_SERVICE_URL").unwrap();
 
     let thumbnail_secret = env::var("THUMBNAIL_SECRET").unwrap();
+    let discord_service_api_key = env::var("DISCORD_SERVICE_API_KEY").unwrap();
 
     let database_url = env::var("DATABASE_URL").expect("NO DB URL CONFIGURED");
 
@@ -76,6 +78,7 @@ async fn main() {
         gateway_client.parse().unwrap(),
         wiki_client.parse().unwrap(),
         dyce_client.parse().unwrap(),
+        "discord.com".parse().unwrap(),
     ]);
 
     let cors = CorsLayer::new()
@@ -91,6 +94,8 @@ async fn main() {
         auth_service_url,
         thumbnail_secret,
         thumbnail_service_url,
+        discord_service_url,
+        discord_service_api_key,
         pool,
     };
 
