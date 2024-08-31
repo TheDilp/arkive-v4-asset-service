@@ -38,3 +38,11 @@ pub struct PermissionCheckResponse {
     pub role_id: Option<Uuid>,
     pub permission_id: Option<Uuid>,
 }
+
+#[derive(Deserialize)]
+pub struct PermissionUpdateType {
+    pub related_id: Uuid,
+    pub user_id: Option<Uuid>,
+    pub permission_id: Option<Uuid>,
+    pub role_id: Option<Uuid>,
+}

@@ -25,7 +25,7 @@ use crate::{
     enums::{ AppResponse, ImageType },
     state::models::{ AppState, PermissionCheckResponse },
     utils::{
-        auth_utils::check_auth,
+        auth_utils::{ check_auth, insert_permissions },
         db_utils::get_client,
         extractors::ExtractPath,
         image_utils::encode_lossy_webp,
@@ -33,14 +33,6 @@ use crate::{
     },
     MAX_FILE_SIZE,
 };
-
-#[derive(Deserialize)]
-struct PermissionUpdateType {
-    related_id: Uuid,
-    user_id: Option<Uuid>,
-    permission_id: Option<Uuid>,
-    role_id: Option<Uuid>,
-}
 
 #[derive(TryFromMultipart)]
 struct UpdatePayload {
@@ -156,99 +148,7 @@ async fn update_asset(
         }
     }
 
-    if permissions.is_some() {
-        let permissions = permissions.unwrap();
-
-        let permissions: Vec<PermissionUpdateType> = serde_json::from_str(&permissions).unwrap();
-
-        for perm in permissions {
-            if perm.role_id.is_some() && perm.permission_id.is_none() && perm.user_id.is_none() {
-                let client = get_client(&state.pool).await;
-                if client.is_err() {
-                    tracing::error!("Error constructing client - PERMISSIONS TRANSACTION.");
-                    return AppResponse::Success(
-                        "Image".to_owned(),
-                        crate::enums::SuccessActions::Update
-                    );
-                }
-                let mut client = client.unwrap();
-
-                let transaction = client.transaction().await.unwrap();
-
-                let del_res = transaction.execute(
-                    "DELETE FROM entity_permissions WHERE id = $1",
-                    &[&perm.related_id]
-                ).await;
-
-                if del_res.is_ok() {
-                    let insert_res = transaction.execute(
-                        "INSERT INTO entity_permissions (related_id, role_id) VALUES ($1, $2) ON CONFLICT (related_id, role_id) DO UPDATE SET role_id = $2;",
-                        &[&perm.related_id, &perm.role_id.unwrap()]
-                    ).await;
-
-                    if insert_res.is_ok() {
-                        let transaction_result = transaction.commit().await;
-
-                        if transaction_result.is_err() {
-                            tracing::error!(
-                                "Transaction error - {}",
-                                transaction_result.err().unwrap().to_string()
-                            );
-                        }
-                    } else {
-                        tracing::error!(
-                            "Transaction error - {}",
-                            insert_res.err().unwrap().to_string()
-                        );
-                    }
-                } else {
-                    tracing::error!("Transaction error - {}", del_res.err().unwrap().to_string());
-                }
-            } else if perm.permission_id.is_some() && perm.user_id.is_some() {
-                let client = get_client(&state.pool).await;
-                if client.is_err() {
-                    tracing::error!("Error constructing client - PERMISSIONS TRANSACTION.");
-                    return AppResponse::Success(
-                        "Image".to_owned(),
-                        crate::enums::SuccessActions::Update
-                    );
-                }
-                let mut client = client.unwrap();
-
-                let transaction = client.transaction().await.unwrap();
-
-                let del_res = transaction.execute(
-                    "DELETE FROM entity_permissions WHERE id = $1",
-                    &[&perm.related_id]
-                ).await;
-
-                if del_res.is_ok() {
-                    let insert_res = transaction.execute(
-                        "INSERT INTO entity_permissions (related_id, permission_id, user_id) VALUES ($1, $2, $3) ON CONFLICT (user_id, related_id, permission_id) DO NOTHING;",
-                        &[&perm.related_id, &perm.permission_id.unwrap(), &perm.user_id.unwrap()]
-                    ).await;
-
-                    if insert_res.is_ok() {
-                        let transaction_result = transaction.commit().await;
-
-                        if transaction_result.is_err() {
-                            tracing::error!(
-                                "Transaction error - {}",
-                                transaction_result.err().unwrap().to_string()
-                            );
-                        }
-                    } else {
-                        tracing::error!(
-                            "Transaction error - {}",
-                            insert_res.err().unwrap().to_string()
-                        );
-                    }
-                } else {
-                    tracing::error!("Transaction error - {}", del_res.err().unwrap().to_string());
-                }
-            }
-        }
-    }
+    let _ = insert_permissions(permissions, &state).await;
 
     return AppResponse::Success("Image".to_owned(), crate::enums::SuccessActions::Update);
 }
