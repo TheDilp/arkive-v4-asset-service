@@ -20,7 +20,7 @@ mod routes;
 mod state;
 mod utils;
 
-const PRESIGN_DURATION: Duration = Duration::from_secs(1800); // 30 mins
+const PRESIGN_DURATION: Duration = Duration::from_secs(3600); // 60 mins
 const MAX_FILE_SIZE: usize = 20_000_000;
 
 #[tokio::main]
