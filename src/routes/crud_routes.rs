@@ -315,7 +315,12 @@ async fn permission_middleware(
         return res;
     }
 
-    let claims = check_auth(cookie_jar, &state.reqwest_client, state.auth_service_url).await;
+    let claims = check_auth(
+        cookie_jar,
+        &state.reqwest_client,
+        state.auth_service_url,
+        request.headers().to_owned()
+    ).await;
 
     if claims.is_err() {
         let res = Response::builder()

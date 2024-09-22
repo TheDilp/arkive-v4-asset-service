@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use axum::http::HeaderMap;
 use axum_extra::extract::{ cookie::Cookie, CookieJar };
 use reqwest::{ header::CONTENT_TYPE, Client, StatusCode };
 
@@ -13,8 +14,17 @@ use super::db_utils::get_client;
 pub async fn check_auth(
     cookie_jar: CookieJar,
     client: &Client,
-    auth_service_url: String
+    auth_service_url: String,
+    headers: HeaderMap
 ) -> Result<VerifyJWTResponse, (StatusCode, String)> {
+    let module = headers.get("module");
+
+    if module.is_none() {
+        return Err((StatusCode::UNAUTHORIZED, "UNAUTHORIZED".to_string()));
+    }
+
+    let module = module.unwrap().to_str().unwrap();
+
     let access_token = cookie_jar.get("access").unwrap_or(&Cookie::new("access", "")).to_string();
     let refresh_token = cookie_jar
         .get("refresh")
@@ -29,6 +39,7 @@ pub async fn check_auth(
     let res = client
         .post(format!("{}/verify", &auth_service_url))
         .header(CONTENT_TYPE, "application/json")
+        .header("module", module)
         .json(&map)
         .send().await
         .unwrap();

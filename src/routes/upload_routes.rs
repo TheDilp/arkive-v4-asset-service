@@ -3,6 +3,7 @@ use std::env;
 use aws_sdk_s3::primitives::ByteStream;
 use axum::{
     extract::{ DefaultBodyLimit, Multipart, State },
+    http::HeaderMap,
     response::IntoResponse,
     routing::post,
     Router,
@@ -25,9 +26,15 @@ async fn upload_image(
     cookie_jar: CookieJar,
     State(state): State<AppState>,
     ExtractPath((project_id, image_type)): ExtractPath<(Uuid, ImageType)>,
+    headers: HeaderMap,
     mut multipart: Multipart
 ) -> impl IntoResponse {
-    let claims = check_auth(cookie_jar, &state.reqwest_client, state.auth_service_url).await;
+    let claims = check_auth(
+        cookie_jar,
+        &state.reqwest_client,
+        state.auth_service_url,
+        headers
+    ).await;
 
     if claims.is_err() {
         return AppResponse::Unauthorized;
@@ -120,10 +127,15 @@ async fn upload_image(
 async fn upload_user_avatar(
     cookie_jar: CookieJar,
     State(state): State<AppState>,
-
+    headers: HeaderMap,
     mut multipart: Multipart
 ) -> impl IntoResponse {
-    let claims = check_auth(cookie_jar, &state.reqwest_client, state.auth_service_url).await;
+    let claims = check_auth(
+        cookie_jar,
+        &state.reqwest_client,
+        state.auth_service_url,
+        headers
+    ).await;
 
     if claims.is_err() {
         return AppResponse::Unauthorized;
