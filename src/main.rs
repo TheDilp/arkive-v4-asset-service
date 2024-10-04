@@ -9,6 +9,7 @@ use routes::{
     crud_routes::crud_routes,
     thumbnail_routes::thumbnail_routes,
     upload_routes::upload_routes,
+    extension_routes::extension_routes,
 };
 use state::models::AppState;
 use tokio::net::TcpListener;
@@ -100,6 +101,7 @@ async fn main() {
     };
 
     let app = Router::new()
+
         .merge(crud_routes(state.clone()))
         .merge(upload_routes())
         .merge(thumbnail_routes())
@@ -119,6 +121,7 @@ async fn main() {
                 })
                 .on_failure(())
         )
+        .merge(extension_routes())
         .with_state(state);
 
     println!("RUNNING ON PORT {} 🚀", port);
