@@ -38,7 +38,8 @@ use crate::{
 struct UpdatePayload {
     title: Option<String>,
     owner_id: Option<Uuid>,
-    #[form_data(limit = "10MiB")]
+    description: Option<String>,
+    #[form_data(limit = "20MiB")]
     file: Option<FieldData<Bytes>>,
     permissions: Option<String>,
 }
@@ -68,7 +69,7 @@ async fn update_asset(
     State(state): State<AppState>,
     ExtractPath(id): ExtractPath<Uuid>,
     TypedMultipart(
-        UpdatePayload { title, owner_id, permissions, file },
+        UpdatePayload { title, description, owner_id, permissions, file },
     ): TypedMultipart<UpdatePayload>
 ) -> impl IntoResponse {
     let client = get_client(&state.pool).await;
@@ -77,10 +78,10 @@ async fn update_asset(
         return client.err().unwrap();
     }
     let client = client.unwrap();
-    if title.is_some() || owner_id.is_some() {
+    if title.is_some() || owner_id.is_some() || description.is_some() {
         if title.is_some() && owner_id.is_some() {
             let res = client.query(
-                "UPDATE images SET title = $1, owner_id = $2 WHERE id = $3",
+                "UPDATE images SET title = $1, owner_id = $2 WHERE id = $3;",
                 &[&title.unwrap(), &owner_id.unwrap(), &id]
             ).await;
 
@@ -89,7 +90,7 @@ async fn update_asset(
             }
         } else if title.is_some() && owner_id.is_none() {
             let res = client.query(
-                "UPDATE images SET title = $1 WHERE id = $2",
+                "UPDATE images SET title = $1 WHERE id = $2;",
                 &[&title.unwrap(), &id]
             ).await;
 
@@ -98,8 +99,19 @@ async fn update_asset(
             }
         } else if title.is_none() && owner_id.is_some() {
             let res = client.query(
-                "UPDATE images SET owner_id = $1 WHERE id = $2",
+                "UPDATE images SET owner_id = $1 WHERE id = $2;",
                 &[&owner_id.unwrap(), &id]
+            ).await;
+
+            if res.is_err() {
+                return AppResponse::Error(res.err().unwrap().to_string());
+            }
+        }
+
+        if description.is_some() {
+            let res = client.query(
+                "UPDATE images SET description = $1 WHERE id = $2;",
+                &[&description.unwrap(), &id]
             ).await;
 
             if res.is_err() {
