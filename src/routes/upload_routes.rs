@@ -88,7 +88,7 @@ async fn upload_image(
             .bucket(&state.bucket)
             .key(format!("assets/{}/{}/{}.webp", &project_id, &image_type, &id))
             .body(ByteStream::from(lossy))
-            .acl(aws_sdk_s3::types::ObjectCannedAcl::Private)
+            .acl(aws_sdk_s3::types::ObjectCannedAcl::PublicRead)
             .content_type("image/webp")
             .cache_control("max-age=600")
             .send().await;
@@ -290,7 +290,7 @@ async fn upload_gateway_entity(
             .bucket(&state.bucket)
             .key(format!("assets/{}/{}/{}.webp", &project_id, ImageType::Images, &entity_id))
             .body(ByteStream::from(lossy))
-            .acl(aws_sdk_s3::types::ObjectCannedAcl::Private)
+            .acl(aws_sdk_s3::types::ObjectCannedAcl::PublicRead)
             .content_type("image/webp")
             .cache_control("max-age=600")
             .send().await;

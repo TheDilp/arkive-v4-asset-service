@@ -150,7 +150,7 @@ async fn update_asset(
             .bucket(&state.bucket)
             .key(format!("assets/{}/{}/{}.webp", &project_id, &image_type, &id))
             .body(ByteStream::from(lossy))
-            .acl(aws_sdk_s3::types::ObjectCannedAcl::Private)
+            .acl(aws_sdk_s3::types::ObjectCannedAcl::PublicRead)
             .content_type("image/webp")
             .cache_control("max-age=600")
             .send().await;

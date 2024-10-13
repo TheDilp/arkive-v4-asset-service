@@ -7,9 +7,10 @@ use deadpool_postgres::{ Config as DeadPoolConfig, ManagerConfig };
 use reqwest::{ header::CONTENT_TYPE, Method };
 use routes::{
     crud_routes::crud_routes,
+    extension_routes::extension_routes,
+    foundry_routes::foundry_routes,
     thumbnail_routes::thumbnail_routes,
     upload_routes::upload_routes,
-    extension_routes::extension_routes,
 };
 use state::models::AppState;
 use tokio::net::TcpListener;
@@ -122,6 +123,7 @@ async fn main() {
                 .on_failure(())
         )
         .merge(extension_routes())
+        .merge(foundry_routes())
         .with_state(state);
 
     println!("RUNNING ON PORT {} 🚀", port);
