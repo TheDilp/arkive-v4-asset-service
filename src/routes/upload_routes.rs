@@ -121,7 +121,7 @@ async fn upload_image(
         }
     }
     tracing::error!("{:?}", errors);
-    return AppResponse::Success("Image".to_owned(), crate::enums::SuccessActions::Upload);
+    return AppResponse::Success("Image(s)".to_owned(), crate::enums::SuccessActions::Upload);
 }
 
 async fn upload_user_avatar(
@@ -340,7 +340,7 @@ async fn upload_gateway_entity(
         }
     }
 
-    return AppResponse::Success("images".to_owned(), crate::enums::SuccessActions::Upload);
+    return AppResponse::Success("Image(s)".to_owned(), crate::enums::SuccessActions::Upload);
 }
 
 pub fn upload_routes() -> Router<AppState> {
