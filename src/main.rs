@@ -2,9 +2,15 @@ use std::{ env, str::FromStr, time::Duration };
 
 use aws_config::{ BehaviorVersion, Region };
 use aws_sdk_s3::config::Credentials;
-use axum::{ extract::{ MatchedPath, Request }, http::HeaderName, Router };
+use axum::{
+    extract::{ MatchedPath, Request },
+    http::HeaderName,
+    response::IntoResponse,
+    Router,
+    routing::get,
+};
 use deadpool_postgres::{ Config as DeadPoolConfig, ManagerConfig };
-use reqwest::{ header::CONTENT_TYPE, Method };
+use reqwest::{ header::CONTENT_TYPE, Method, StatusCode };
 use routes::{
     crud_routes::crud_routes,
     extension_routes::extension_routes,
@@ -24,6 +30,10 @@ mod utils;
 
 const PRESIGN_DURATION: Duration = Duration::from_secs(3600); // 60 mins
 const MAX_FILE_SIZE: usize = 20_000_000;
+
+async fn health_check() -> impl IntoResponse {
+    return (StatusCode::OK, "Ok");
+}
 
 #[tokio::main]
 async fn main() {
@@ -124,7 +134,8 @@ async fn main() {
         )
         .merge(extension_routes())
         .merge(foundry_routes())
-        .with_state(state);
+        .with_state(state)
+        .route("/health_check", get(health_check));
 
     println!("RUNNING ON PORT {} 🚀", port);
 
