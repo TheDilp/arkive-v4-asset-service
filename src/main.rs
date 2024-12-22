@@ -49,7 +49,6 @@ async fn main() {
     let editor_client = env::var("EDITOR_CLIENT_URL").unwrap();
     let wiki_client = env::var("WIKI_CLIENT_URL").unwrap();
     let gateway_client = env::var("GATEWAY_CLIENT_URL").unwrap();
-    let dyce_client = env::var("DYCE_CLIENT_URL").unwrap();
 
     let auth_service_url = env::var("AUTH_SERVICE_URL").unwrap();
     let thumbnail_service_url = env::var("THUMBNAIL_SERVICE").unwrap();
@@ -89,7 +88,6 @@ async fn main() {
         editor_client.parse().unwrap(),
         gateway_client.parse().unwrap(),
         wiki_client.parse().unwrap(),
-        dyce_client.parse().unwrap(),
         "discord.com".parse().unwrap(),
     ]);
 
